@@ -27,6 +27,13 @@ if errorlevel 1 (
   goto :failure
 )
 
+where concurrently.cmd >nul 2>&1
+if errorlevel 1 (
+  echo concurrently nao encontrado.
+  echo Execute npm.cmd install -g concurrently antes de iniciar o monitor.
+  goto :failure
+)
+
 if not exist "frontend\node_modules\.bin\vite.cmd" (
   echo Dependencias do frontend nao instaladas.
   echo Execute npm.cmd ci dentro da pasta frontend.
@@ -38,7 +45,8 @@ echo API: http://127.0.0.1:8765
 echo Web: http://127.0.0.1:5177
 echo O navegador sera aberto automaticamente. Use Ctrl+C para encerrar.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start.ps1" %*
+set "PYTHONPATH=%CD%\backend"
+call concurrently --names "Monitor:API,Vite" ".venv\Scripts\python.exe -m codex_monitor" "cd /d frontend && npm.cmd run dev -- --open / %*"
 set "SERVERS_EXIT_CODE=%ERRORLEVEL%"
 popd
 if not "%SERVERS_EXIT_CODE%"=="0" pause
