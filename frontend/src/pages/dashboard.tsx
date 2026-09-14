@@ -26,8 +26,8 @@ export function Dashboard() {
   return <>
     <div className="page-heading"><div><p className="eyebrow">VISÃO GERAL</p><h1>Saúde das suas threads</h1><p>Custos relativos, contexto e atividade em tempo quase real.</p></div><span className="updated">Atualizado às {time(data.generated_at)}</span></div>
     <div className="rate-grid">
-      <RateCard title="Janela de 5 horas" window={primary} />
-      <RateCard title="Uso semanal" window={secondary} />
+      <RateCard title="Janela de 5 horas" window={primary} observedAt={data.rate_limits?.observed_at} />
+      <RateCard title="Uso semanal" window={secondary} observedAt={data.rate_limits?.observed_at} />
     </div>
     {!active ? <Empty><Database /><h2>Nenhuma sessão encontrada</h2><p>O monitor aguardará arquivos em .codex\sessions.</p></Empty> : <>
       <Card className="active-card">
@@ -53,9 +53,10 @@ export function Dashboard() {
   </>
 }
 
-function RateCard({ title, window }: { title: string; window?: { used_percent: number; resets_at: number } }) {
-  const percent = Math.min(100, Math.max(0, window?.used_percent ?? 0))
-  return <Card className="rate-card"><div><span>{title}</span><strong>{window ? `${percent.toFixed(0)}%` : 'Indisponível'}</strong></div><div className="progress"><i style={{ width: `${percent}%` }} /></div><small>Reset: {dateTimeFromEpoch(window?.resets_at)}</small><p>Uso global da conta</p></Card>
+function RateCard({ title, window, observedAt }: { title: string; window?: { used_percent: number; resets_at: number }; observedAt?: string }) {
+  const usedPercent = Math.min(100, Math.max(0, window?.used_percent ?? 0))
+  const remainingPercent = 100 - usedPercent
+  return <Card className="rate-card"><div><span>{title}</span><strong>{window ? `${usedPercent.toFixed(0)}% usado · ${remainingPercent.toFixed(0)}% restante` : 'Indisponível'}</strong></div><div className="progress"><i style={{ width: `${usedPercent}%` }} /></div><small>Reset: {dateTimeFromEpoch(window?.resets_at)}</small><p>Dados observados às {time(observedAt ?? null)}</p></Card>
 }
 
 function sortValue(thread: Thread, key: SortKey) {
