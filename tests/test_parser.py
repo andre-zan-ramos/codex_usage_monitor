@@ -107,3 +107,21 @@ def test_rate_limit_reset_and_multiple_threads(tmp_path):
     assert len(dashboard["threads"]) == 2
     assert dashboard["rate_limit_resets_detected"] == 1
     assert dashboard["rate_limits"]["primary"]["used_percent"] == 5
+
+
+def test_dashboard_always_includes_at_least_five_most_recent_threads(tmp_path):
+    for index in range(7):
+        path = write_session(tmp_path, f"thread-{index}.jsonl")
+        timestamp = f"2026-09-{index + 1:02d}T12:00:00Z"
+        path.write_bytes(line(event("session_meta", {"id": f"thread-{index}"}, timestamp)))
+
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+
+    assert [thread["id"] for thread in monitor.dashboard()["threads"]] == [
+        "thread-6",
+        "thread-5",
+        "thread-4",
+        "thread-3",
+        "thread-2",
+    ]

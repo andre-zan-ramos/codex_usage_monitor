@@ -218,6 +218,7 @@ class SessionMonitor:
         threads = self.threads()
         today = datetime.now().astimezone().date()
         threads_today = [item for item in threads if self._local_date(item.get("started_at") or item.get("last_activity")) == today]
+        visible_threads = threads_today if len(threads_today) >= 5 else threads[:5]
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "sessions_dir": str(self.settings.sessions_dir),
@@ -225,7 +226,7 @@ class SessionMonitor:
             "rate_limits": self._latest_rate,
             "rate_limit_resets_detected": self.rate_reset_count,
             "active_thread": threads[0] if threads else None,
-            "threads": threads_today,
+            "threads": visible_threads,
             "methodology": {"wci_weights": vars(self.settings.weights), "health_normalized": True, "rate_limits_are_global": True},
         }
 
