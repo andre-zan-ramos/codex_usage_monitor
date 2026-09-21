@@ -25,6 +25,29 @@ def _usage(value: Any) -> dict[str, int] | None:
     return {key: max(0, int(value.get(key, 0) or 0)) for key in USAGE_KEYS}
 
 
+def _message_title(message: Any) -> str | None:
+    if not isinstance(message, str):
+        return None
+    cleaned = " ".join(message.split())
+    if not cleaned or cleaned.startswith(("<recommended_plugins>", "<environment_context>")):
+        return None
+    return cleaned[:72] + ("…" if len(cleaned) > 72 else "")
+
+
+def _response_user_message(payload: dict[str, Any]) -> str | None:
+    if payload.get("type") != "message" or payload.get("role") != "user":
+        return None
+    content = payload.get("content")
+    if not isinstance(content, list):
+        return None
+    for item in content:
+        if isinstance(item, dict) and item.get("type") in {"input_text", "text"}:
+            title = _message_title(item.get("text"))
+            if title:
+                return title
+    return None
+
+
 @dataclass
 class ThreadState:
     path: Path
@@ -69,11 +92,10 @@ class ThreadState:
             self.compactions += 1
         elif kind == "event_msg" and ptype == "user_message":
             self.user_messages += 1
-            message = payload.get("message")
-            if self.title is None and isinstance(message, str):
-                cleaned = " ".join(message.split())
-                self.title = cleaned[:72] + ("…" if len(cleaned) > 72 else "")
-        elif kind == "response_item" and ptype in {"function_call", "custom_tool_call", "local_shell_call", "web_search_call"}:
+            self.title = self.title or _message_title(payload.get("message"))
+        elif kind == "response_item":
+            self.title = self.title or _response_user_message(payload)
+        if kind == "response_item" and ptype in {"function_call", "custom_tool_call", "local_shell_call", "web_search_call"}:
             call_id = str(payload.get("call_id") or payload.get("id") or f"event-{self.event_count}")
             self.tool_call_ids.add(call_id)
         elif kind == "event_msg" and ptype == "token_count":

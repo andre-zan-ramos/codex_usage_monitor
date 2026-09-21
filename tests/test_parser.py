@@ -56,6 +56,28 @@ def test_different_events_missing_fields_and_accumulators(tmp_path):
     assert thread["title"].startswith("Meu prompt privado")
 
 
+def test_title_falls_back_to_response_item_and_skips_injected_context(tmp_path):
+    path = write_session(tmp_path)
+    data = b"".join([
+        line(event("session_meta", {"id": "response-title"})),
+        line(event("response_item", {"type": "message", "role": "user", "content": [
+            {"type": "input_text", "text": "<recommended_plugins>internal</recommended_plugins>"},
+        ]})),
+        line(event("response_item", {"type": "message", "role": "user", "content": [
+            {"type": "input_text", "text": "<environment_context>internal</environment_context>"},
+        ]})),
+        line(event("response_item", {"type": "message", "role": "user", "content": [
+            {"type": "input_text", "text": "Nome real da thread vindo do pedido do usuário"},
+        ]})),
+    ])
+    path.write_bytes(data)
+
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+
+    assert monitor.thread("response-title")["title"] == "Nome real da thread vindo do pedido do usuário"
+
+
 def test_incremental_read_and_no_double_count(tmp_path):
     path = write_session(tmp_path)
     path.write_bytes(line(event("session_meta", {"id": "incremental"})) + line(token_event()))
