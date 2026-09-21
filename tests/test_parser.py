@@ -105,8 +105,10 @@ def test_rate_limit_reset_and_multiple_threads(tmp_path):
     monitor.scan()
     dashboard = monitor.dashboard()
     assert len(dashboard["threads"]) == 2
-    assert dashboard["rate_limit_resets_detected"] == 1
-    assert dashboard["rate_limits"]["primary"]["used_percent"] == 5
+    primary = dashboard["allowance"]["primary"]
+    assert primary is not None
+    assert primary["used_percent"] == 5
+    assert primary["cycle"] == 1
 
 
 def test_dashboard_always_includes_at_least_five_most_recent_threads(tmp_path):

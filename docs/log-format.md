@@ -1,21 +1,23 @@
 # Formato dos logs observado
 
-Inspeção local realizada em 14/09/2026 sobre amostras recentes, sem copiar conteúdo pessoal.
+O monitor lê somente JSONL locais e ignora com segurança campos ou linhas inválidas.
 
-- `session_meta`: identifica sessão/thread, início, diretório e, em algumas versões, `context_window`.
-- `turn_context`: fornece `model`, `effort` e configuração do turno.
-- `event_msg.token_count`: contém `info.total_token_usage` acumulado, `info.last_token_usage` da chamada, `model_context_window` e snapshots globais de rate limit.
-- `token_usage_record`: representação adicional presente nas versões atuais. O parser usa `token_count` como fonte canônica para evitar dupla contagem.
-- `response_item.*_call`: chamadas de ferramentas, deduplicadas por `call_id`/`id`.
-- `event_msg.user_message`: contado; apenas um título local curto é derivado da primeira mensagem. Textos integrais não são enviados nem exibidos no dashboard.
-- `compacted` e `event_msg.context_compacted`: eventos de compactação.
+- `session_meta` identifica sessão/thread e início.
+- `turn_context` fornece modelo e esforço.
+- `event_msg.token_count` contém `info.total_token_usage` acumulado, `last_token_usage`, contexto e snapshots globais de `rate_limits`.
+- `response_item.*_call` fornece chamadas de ferramentas deduplicadas.
+- Eventos de compactação e mensagens de usuário são contados; prompts completos não são enviados nem exibidos.
 
-## Semântica adotada
+`input_tokens` inclui `cached_input_tokens`; input novo é a diferença não negativa. `reasoning_output_tokens` já faz parte de `output_tokens` e não é somado outra vez.
 
-`input_tokens` inclui `cached_input_tokens`; portanto, input novo é a diferença não negativa. `total_tokens` observado equivale a input + output. `reasoning_output_tokens` faz parte do output e é apenas exibido separadamente, nunca somado outra vez.
+## Thread Health
 
-Pressão de contexto usa o input da última chamada dividido por `model_context_window`, ambos informados no mesmo snapshot. Se um deles faltar, a métrica fica indisponível e o Health Score é normalizado pelo máximo disponível.
+WCI e Health Score são diagnósticos estruturais da thread: contexto, input, cache, output e tools. Eles não medem nem estimam créditos ou franquia do Codex.
 
-Rate limits são globais da conta. O monitor mostra apenas o snapshot mais recente, separa janelas por `window_minutes` e detecta queda de uso acompanhada de mudança em `resets_at`. Nenhum percentual é atribuído a uma thread.
+## Allowance Burn
 
-O formato é interno e pode mudar; campos desconhecidos ou ausentes são ignorados com segurança.
+Rate limits são globais da conta. Cada `token_count` pode registrar `primary` (5h) e `secondary` (semanal), com `used_percent`, `window_minutes` e `resets_at`. A timeline é consolidada entre arquivos; uma thread que contém o snapshot não recebe autoria do consumo.
+
+Pontos equivalentes próximos são fundidos. Pequenas regressões entre produtores são descartadas da série canônica. Um novo ciclo é aberto por mudança material de `resets_at` ou queda inequívoca, como 98% para 2%; nenhum burn atravessa ciclos.
+
+Para 5h, as taxas curta e recente usam regressão linear sobre pontos reamostrados a cada 15 segundos nas janelas de 5 e 15 minutos. A estimativa até o limite só aparece com dados suficientes, sem reset cruzado e com snapshot de no máximo 120 segundos. Os parâmetros e thresholds ficam centralizados em `config.py`.

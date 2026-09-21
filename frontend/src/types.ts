@@ -32,11 +32,21 @@ export type Thread = {
   evolution?: Array<Usage & { timestamp: string; wci: number; cumulative_wci: number; cumulative_input_tokens: number; tool_calls: number; context_pressure: number | null }>
 }
 
-export type RateWindow = { used_percent: number; window_minutes: number; resets_at: number }
+export type AllowanceWindow = {
+  window_minutes: number; used_percent: number; remaining_percent: number; resets_at: number | null
+  observed_at: string; age_seconds: number; fresh: boolean; cycle: number
+  short_rate_ppm: number | null; recent_rate_ppm: number | null; session_rate_ppm: number | null
+  trend: string; classification: 'NORMAL' | 'ELEVADO' | 'MUITO ALTO' | 'CRÍTICO' | null
+  estimated_minutes_to_limit: number | null
+  attribution: { confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'; active_threads: number; message: string }
+  models: string[]
+}
+export type TimelinePoint = { observed_at: string; used_percent: number; resets_at: number | null; cycle: number; reset: boolean }
 export type DashboardData = {
   generated_at: string
   poll_seconds: number
-  rate_limits: { primary?: RateWindow; secondary?: RateWindow; observed_at?: string } | null
+  allowance: { primary: AllowanceWindow | null; secondary: AllowanceWindow | null; models_recent: Array<{ id: string; label: string; relative_cost_factor: number | null }>; alerts: Array<{ severity: string; message: string }> }
   active_thread: Thread | null
   threads: Thread[]
 }
+export type TimelineData = { range: string; generated_at: string; windows: Record<string, TimelinePoint[]> }

@@ -27,6 +27,30 @@ class Thresholds:
 
 
 @dataclass(frozen=True)
+class AllowanceSettings:
+    min_bucket_seconds: int = 15
+    minimum_points: int = 3
+    minimum_span_minutes: float = 2.0
+    reset_jitter_seconds: int = 60
+    reset_drop_points: float = 50.0
+    reset_low_percent: float = 20.0
+    stale_seconds: int = 120
+    activity_gap_minutes: int = 5
+    activity_grace_minutes: int = 2
+    session_gap_minutes: int = 30
+    primary_short_minutes: int = 5
+    primary_recent_minutes: int = 15
+    secondary_recent_minutes: int = 60
+    secondary_trend_minutes: int = 360
+    burn_thresholds: tuple[tuple[float, str], ...] = (
+        (0.5, "NORMAL"), (1.0, "ELEVADO"), (2.0, "MUITO ALTO"),
+    )
+    model_cost_factors: dict[str, float] = field(default_factory=lambda: {
+        "gpt-5.6-sol": 1.0, "gpt-6-astra": 2.5,
+    })
+
+
+@dataclass(frozen=True)
 class Settings:
     sessions_dir: Path = field(
         default_factory=lambda: Path(
@@ -36,6 +60,7 @@ class Settings:
     poll_seconds: float = float(os.environ.get("CODEX_MONITOR_POLL_SECONDS", "3"))
     weights: WCIWeights = field(default_factory=WCIWeights)
     thresholds: Thresholds = field(default_factory=Thresholds)
+    allowance: AllowanceSettings = field(default_factory=AllowanceSettings)
 
 
 settings = Settings()

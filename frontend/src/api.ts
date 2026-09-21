@@ -1,4 +1,4 @@
-import type { DashboardData, Thread } from './types'
+import type { DashboardData, Thread, TimelineData } from './types'
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path)
@@ -9,4 +9,5 @@ async function getJson<T>(path: string): Promise<T> {
 export const api = {
   dashboard: () => getJson<DashboardData>('/api/dashboard'),
   thread: (id: string) => getJson<Thread>(`/api/threads/${encodeURIComponent(id)}`),
+  timeline: (range: string) => getJson<TimelineData>(`/api/rate-limits/timeline?range=${encodeURIComponent(range)}`),
 }

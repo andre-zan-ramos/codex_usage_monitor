@@ -29,4 +29,6 @@ $env:PYTHONPATH = "$PWD\backend"
 .\.venv\Scripts\python.exe -m codex_monitor
 ```
 
-Detalhes do formato e limitações estão em [docs/log-format.md](docs/log-format.md).
+O topo do dashboard mostra `Allowance Burn`: a velocidade real da cota global de 5h e semanal, baseada nos snapshots `used_percent` registrados pelo Codex. `Thread Health` e WCI permanecem abaixo como diagnóstico estrutural para decidir se vale continuar uma thread; eles não estimam créditos.
+
+O monitor continua sem banco, telemetria ou escrita nos JSONL. A timeline é reconstruída na inicialização e atualizada incrementalmente em polling. Detalhes de formato, algoritmo, reset e limitações estão em [docs/log-format.md](docs/log-format.md).

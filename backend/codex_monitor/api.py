@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -47,6 +47,12 @@ def api_thread(thread_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Thread não encontrada")
     return result
+
+
+@app.get("/api/rate-limits/timeline")
+def api_rate_timeline(range: str = Query("5h", pattern="^(1h|5h|today|7d)$")):
+    monitor.scan()
+    return monitor.rate_timeline(range)
 
 
 dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
