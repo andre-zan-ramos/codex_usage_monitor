@@ -58,6 +58,11 @@ class Settings:
         ).resolve()
     )
     poll_seconds: float = float(os.environ.get("CODEX_MONITOR_POLL_SECONDS", "3"))
+    session_index_file: Path | None = field(
+        default_factory=lambda: Path(value).resolve()
+        if (value := os.environ.get("CODEX_SESSION_INDEX_FILE"))
+        else None
+    )
     weights: WCIWeights = field(default_factory=WCIWeights)
     thresholds: Thresholds = field(default_factory=Thresholds)
     allowance: AllowanceSettings = field(default_factory=AllowanceSettings)

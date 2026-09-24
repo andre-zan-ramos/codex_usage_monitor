@@ -133,7 +133,12 @@ class ThreadState:
                         thread_id=self.thread_id, model=self.model, source=str(self.path),
                     ))
 
-    def as_dict(self, settings: Settings, include_evolution: bool = False) -> dict[str, Any]:
+    def as_dict(
+        self,
+        settings: Settings,
+        include_evolution: bool = False,
+        indexed_title: str | None = None,
+    ) -> dict[str, Any]:
         latest = self.calls[-1] if self.calls else None
         pressure = None
         if latest and self.context_window:
@@ -143,7 +148,7 @@ class ThreadState:
             "id": self.thread_id,
             "started_at": self.started_at,
             "last_activity": self.last_activity,
-            "title": self.title or f"Thread {self.thread_id[:8]}",
+            "title": indexed_title or self.title or f"Thread {self.thread_id[:8]}",
             "model": self.model,
             "reasoning_effort": self.effort,
             "usage": {**self.usage, "uncached_input_tokens": max(0, self.usage["input_tokens"] - self.usage["cached_input_tokens"])},
@@ -197,13 +202,39 @@ class SessionMonitor:
         self.settings = settings
         self.files: dict[Path, FileCursor] = {}
         self.allowance = AllowanceAnalyzer(settings.allowance)
+        self.thread_titles: dict[str, str] = {}
+        self._session_index_signature: tuple[int, int] | None = None
 
     def scan(self) -> None:
+        self._scan_session_index()
         root = self.settings.sessions_dir
         if not root.exists():
             return
         for path in root.glob("*/*/*/*.jsonl"):
             self._scan_file(path.resolve())
+
+    def _scan_session_index(self) -> None:
+        path = self.settings.session_index_file or self.settings.sessions_dir.parent / "session_index.jsonl"
+        try:
+            stat = path.stat()
+            signature = (stat.st_mtime_ns, stat.st_size)
+            if signature == self._session_index_signature:
+                return
+            titles: dict[str, str] = {}
+            with path.open("r", encoding="utf-8") as handle:
+                for raw in handle:
+                    try:
+                        item = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    thread_id = item.get("id") if isinstance(item, dict) else None
+                    title = item.get("thread_name") if isinstance(item, dict) else None
+                    if isinstance(thread_id, str) and isinstance(title, str) and title.strip():
+                        titles[thread_id] = " ".join(title.split())
+        except (OSError, PermissionError, UnicodeDecodeError):
+            return
+        self.thread_titles = titles
+        self._session_index_signature = signature
 
     def _scan_file(self, path: Path) -> None:
         rebuilt = False
@@ -274,7 +305,10 @@ class SessionMonitor:
         return result
 
     def threads(self, details: bool = False) -> list[dict[str, Any]]:
-        values = [cursor.state.as_dict(self.settings, details) for cursor in self.files.values() if cursor.state]
+        values = [
+            cursor.state.as_dict(self.settings, details, self.thread_titles.get(cursor.state.thread_id))
+            for cursor in self.files.values() if cursor.state
+        ]
         return sorted(values, key=lambda item: item.get("last_activity") or "", reverse=True)
 
     def dashboard(self) -> dict[str, Any]:
@@ -347,5 +381,5 @@ class SessionMonitor:
     def thread(self, thread_id: str) -> dict[str, Any] | None:
         for cursor in self.files.values():
             if cursor.state and cursor.state.thread_id == thread_id:
-                return cursor.state.as_dict(self.settings, True)
+                return cursor.state.as_dict(self.settings, True, self.thread_titles.get(thread_id))
         return None

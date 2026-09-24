@@ -149,3 +149,25 @@ def test_dashboard_always_includes_at_least_five_most_recent_threads(tmp_path):
         "thread-3",
         "thread-2",
     ]
+
+
+def test_title_uses_codex_session_index_and_tracks_renames(tmp_path):
+    path = write_session(tmp_path)
+    path.write_bytes(
+        line(event("session_meta", {"id": "indexed-title"}))
+        + line(event("event_msg", {"type": "user_message", "message": "Primeiro pedido muito longo"}))
+    )
+    index_path = tmp_path / "session_index.jsonl"
+    index_path.write_text(
+        json.dumps({"id": "indexed-title", "thread_name": "Nome exibido no VS Code"}) + "\n",
+        encoding="utf-8",
+    )
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path, session_index_file=index_path))
+
+    monitor.scan()
+    assert monitor.thread("indexed-title")["title"] == "Nome exibido no VS Code"
+
+    with index_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"id": "indexed-title", "thread_name": "Nome renomeado"}) + "\n")
+    monitor.scan()
+    assert monitor.thread("indexed-title")["title"] == "Nome renomeado"
