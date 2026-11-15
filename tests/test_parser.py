@@ -171,3 +171,83 @@ def test_title_uses_codex_session_index_and_tracks_renames(tmp_path):
         handle.write(json.dumps({"id": "indexed-title", "thread_name": "Nome renomeado"}) + "\n")
     monitor.scan()
     assert monitor.thread("indexed-title")["title"] == "Nome renomeado"
+
+
+def test_unchanged_usage_does_not_add_calls_but_refreshes_global_quota(tmp_path):
+    path = write_session(tmp_path)
+    path.write_bytes(line(event("session_meta", {"id": "dedup"})) + line(token_event()))
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+    repeated = token_event(rate=20) | {"timestamp": "2026-09-14T12:01:00Z"}
+    with path.open("ab") as handle:
+        handle.write(line(event("response_item", {"type": "function_call", "call_id": "new-tool"})))
+        handle.write(line(repeated))
+    monitor.scan()
+    result = monitor.thread("dedup")
+    assert len(result["evolution"]) == 1
+    assert result["tool_calls"] == 1
+    assert result["last_activity"] == repeated["timestamp"]
+    assert len(monitor.allowance.observations) == 4
+    assert monitor.allowance.observations[-2].used_percent == 20
+    # An identical last-call size can still represent new consumption when totals advance.
+    with path.open("ab") as handle:
+        handle.write(line(token_event(2_000, 1_600, 200, last_input=500)))
+    monitor.scan()
+    monitor.scan()
+    assert len(monitor.thread("dedup")["evolution"]) == 2
+
+
+def test_old_partial_logs_preserve_missing_and_explicit_zero(tmp_path):
+    path = write_session(tmp_path)
+    path.write_bytes(line(event("session_meta", {"id": "partial-usage"})))
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+    result = monitor.thread("partial-usage")
+    assert all(value is None for value in result["usage"].values())
+    assert result["wci"] is None
+    assert result["health"]["score"] is None
+    usage = {"input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": None}
+    with path.open("ab") as handle:
+        handle.write(line(event("event_msg", {"type": "token_count", "info": {"total_token_usage": usage, "last_token_usage": usage}})))
+    monitor.scan()
+    result = monitor.thread("partial-usage")
+    assert result["usage"]["input_tokens"] == 0
+    assert result["usage"]["cached_input_tokens"] is None
+    assert result["usage"]["reasoning_output_tokens"] is None
+    assert result["usage"]["uncached_input_tokens"] is None
+    assert result["wci"] is None
+    assert result["health"]["score"] == 0
+    assert result["evolution"] == []
+    usage = {"input_tokens": 20, "output_tokens": 2}
+    with path.open("ab") as handle:
+        handle.write(line(event("event_msg", {"type": "token_count", "info": {"total_token_usage": usage, "last_token_usage": usage, "model_context_window": 100}})))
+    monitor.scan()
+    result = monitor.thread("partial-usage")
+    assert result["context_pressure"] == 20
+    assert result["evolution"][0]["wci"] is None
+    assert result["evolution"][0]["cumulative_wci"] is None
+
+
+def test_last_only_snapshots_are_deduplicated_and_invalid_fields_are_unknown(tmp_path):
+    path = write_session(tmp_path)
+    usage = {"input_tokens": 10, "cached_input_tokens": "invalid", "output_tokens": 0}
+    path.write_bytes(b"".join(line(event("event_msg", {"type": "token_count", "info": {"last_token_usage": usage}}, timestamp)) for timestamp in ["2026-09-14T12:00:00Z", "2026-09-14T12:01:00Z"]))
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+    result = monitor.threads(details=True)[0]
+    assert len(result["evolution"]) == 1
+    assert result["evolution"][0]["cached_input_tokens"] is None
+    assert result["usage"]["input_tokens"] is None
+
+
+def test_missing_metadata_and_snapshot_source_changes_do_not_create_calls(tmp_path):
+    path = write_session(tmp_path)
+    first = token_event()
+    missing_total = token_event()
+    del missing_total["payload"]["info"]["total_token_usage"]
+    missing_cache = token_event()
+    del missing_cache["payload"]["info"]["total_token_usage"]["cached_input_tokens"]
+    path.write_bytes(b"".join(line(item) for item in [first, missing_total, missing_cache, token_event()]))
+    monitor = SessionMonitor(Settings(sessions_dir=tmp_path))
+    monitor.scan()
+    assert len(monitor.threads(details=True)[0]["evolution"]) == 1

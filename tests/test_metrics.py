@@ -22,4 +22,24 @@ def test_health_normalizes_without_context():
 
 def test_health_override_for_real_context_pressure():
     result = health({"input_tokens": 10, "output_tokens": 1}, 0, 86, None, Thresholds())
-    assert result["label"] == "MUITO CARA"
+    assert result["label"] == "CARGA MUITO ALTA"
+
+
+def test_missing_usage_is_not_zero_or_a_low_score():
+    assert wci({"input_tokens": 10, "output_tokens": 1}, WCIWeights()) is None
+    assert wci({"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}, WCIWeights()) == 0
+    result = health({"input_tokens": None, "output_tokens": 0}, 0, None, None, Thresholds())
+    assert result["score"] is None
+    assert result["label"] == "INDISPONÍVEL"
+    points = [{"input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 0} for _ in range(7)]
+    points[-3]["cached_input_tokens"] = None
+    assert recent_growth(points, WCIWeights()) is None
+
+
+def test_health_keeps_formula_and_describes_heuristic_without_restart_advice():
+    result = health({"input_tokens": 3_000_000, "output_tokens": 75_000}, 20, None, None, Thresholds())
+    assert result["raw_score"] == 22
+    assert result["score"] == 34
+    assert result["label"] == "CARGA MODERADA"
+    assert result["heuristic"] is True
+    assert "financeiro" in result["recommendation"]

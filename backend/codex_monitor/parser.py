@@ -19,10 +19,17 @@ def _iso(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _usage(value: Any) -> dict[str, int] | None:
+def _usage(value: Any) -> dict[str, int | None] | None:
     if not isinstance(value, dict):
         return None
-    return {key: max(0, int(value.get(key, 0) or 0)) for key in USAGE_KEYS}
+    result: dict[str, int | None] = {}
+    for key in USAGE_KEYS:
+        raw = value.get(key)
+        try:
+            result[key] = max(0, int(raw)) if raw is not None and not isinstance(raw, bool) else None
+        except (ValueError, TypeError, OverflowError):
+            result[key] = None
+    return result
 
 
 def _message_title(message: Any) -> str | None:
@@ -58,7 +65,9 @@ class ThreadState:
     model: str | None = None
     effort: str | None = None
     context_window: int | None = None
-    usage: dict[str, int] = field(default_factory=lambda: {key: 0 for key in USAGE_KEYS})
+    usage: dict[str, int | None] = field(default_factory=lambda: {key: None for key in USAGE_KEYS})
+    _observed_total: dict[str, int | None] = field(default_factory=dict)
+    _observed_last: dict[str, int | None] = field(default_factory=dict)
     calls: list[dict[str, Any]] = field(default_factory=list)
     tool_call_ids: set[str] = field(default_factory=set)
     user_messages: int = 0
@@ -102,9 +111,21 @@ class ThreadState:
             info = payload.get("info") if isinstance(payload.get("info"), dict) else {}
             total = _usage(info.get("total_token_usage"))
             last = _usage(info.get("last_token_usage"))
-            if total:
-                self.usage = total
+            # Timestamps, tools and rate-limit refreshes do not establish new consumption.
+            observed = total if total and any(v is not None for v in total.values()) else last
+            changed = False
+            if observed and any(v is not None for v in observed.values()):
+                previous = self._observed_total if observed is total else self._observed_last
+                changed = (not previous and any(value for value in observed.values())) or any(
+                    value is not None and previous.get(key) is not None and value != previous[key]
+                    for key, value in observed.items()
+                )
+                previous.update({key: value for key, value in observed.items() if value is not None})
             if last:
+                self._observed_last.update({key: value for key, value in last.items() if value is not None})
+            if total is not None:
+                self.usage = total
+            if last and changed:
                 point = {
                     **last,
                     "timestamp": timestamp,
@@ -113,8 +134,7 @@ class ThreadState:
                     "cumulative_output_tokens": (total or self.usage)["output_tokens"],
                     "tool_calls": len(self.tool_call_ids),
                 }
-                if not self.calls or point != self.calls[-1]:
-                    self.calls.append(point)
+                self.calls.append(point)
             window = info.get("model_context_window")
             self.context_window = int(window) if isinstance(window, (int, float)) and window > 0 else self.context_window
             if isinstance(payload.get("rate_limits"), dict):
@@ -141,7 +161,7 @@ class ThreadState:
     ) -> dict[str, Any]:
         latest = self.calls[-1] if self.calls else None
         pressure = None
-        if latest and self.context_window:
+        if latest and latest["input_tokens"] is not None and self.context_window:
             pressure = round(latest["input_tokens"] / self.context_window * 100, 2)
         growth = recent_growth(self.calls, settings.weights)
         result = {
@@ -151,10 +171,10 @@ class ThreadState:
             "title": indexed_title or self.title or f"Thread {self.thread_id[:8]}",
             "model": self.model,
             "reasoning_effort": self.effort,
-            "usage": {**self.usage, "uncached_input_tokens": max(0, self.usage["input_tokens"] - self.usage["cached_input_tokens"])},
-            "cache_ratio": round(self.usage["cached_input_tokens"] / self.usage["input_tokens"], 4) if self.usage["input_tokens"] else None,
+            "usage": {**self.usage, "uncached_input_tokens": max(0, self.usage["input_tokens"] - self.usage["cached_input_tokens"]) if self.usage["input_tokens"] is not None and self.usage["cached_input_tokens"] is not None else None},
+            "cache_ratio": round(self.usage["cached_input_tokens"] / self.usage["input_tokens"], 4) if self.usage["input_tokens"] and self.usage["cached_input_tokens"] is not None else None,
             "wci": wci(self.usage, settings.weights),
-            "wci_label": "Índice relativo",
+            "wci_label": "Índice heurístico, sem equivalência financeira",
             "tool_calls": len(self.tool_call_ids),
             "user_messages": self.user_messages,
             "compactions": self.compactions,
@@ -175,7 +195,7 @@ class ThreadState:
                         "cached_input_tokens": point["cumulative_cached_input_tokens"],
                         "output_tokens": point["cumulative_output_tokens"],
                     }, settings.weights),
-                    "context_pressure": round(point["input_tokens"] / self.context_window * 100, 2) if self.context_window else None,
+                    "context_pressure": round(point["input_tokens"] / self.context_window * 100, 2) if self.context_window and point["input_tokens"] is not None else None,
                 }
                 for point in self.calls
             ]

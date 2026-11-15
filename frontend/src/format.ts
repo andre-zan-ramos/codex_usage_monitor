@@ -1,6 +1,10 @@
 export const compact = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })
 export const number = new Intl.NumberFormat('pt-BR')
 
+export function compactValue(value: number | null) {
+  return value === null ? 'Não informado' : compact.format(value)
+}
+
 export function time(value: string | null) {
   return value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value)) : '—'
 }

@@ -1,15 +1,16 @@
 export type Usage = {
-  input_tokens: number
-  cached_input_tokens: number
-  uncached_input_tokens: number
-  output_tokens: number
-  reasoning_output_tokens: number
-  total_tokens: number
+  input_tokens: number | null
+  cached_input_tokens: number | null
+  uncached_input_tokens: number | null
+  output_tokens: number | null
+  reasoning_output_tokens: number | null
+  total_tokens: number | null
 }
 
 export type Health = {
-  score: number
-  label: 'LEVE' | 'CRESCENDO' | 'CARA' | 'MUITO CARA'
+  score: number | null
+  label: 'CARGA BAIXA' | 'CARGA MODERADA' | 'CARGA ALTA' | 'CARGA MUITO ALTA' | 'INDISPONÍVEL'
+  heuristic: boolean
   recommendation: string
 }
 
@@ -22,14 +23,14 @@ export type Thread = {
   reasoning_effort: string | null
   usage: Usage
   cache_ratio: number | null
-  wci: number
+  wci: number | null
   tool_calls: number
   compactions: number
   context_pressure: number | null
   recent_growth_percent: number | null
   duration_seconds: number | null
   health: Health
-  evolution?: Array<Usage & { timestamp: string; wci: number; cumulative_wci: number; cumulative_input_tokens: number; tool_calls: number; context_pressure: number | null }>
+  evolution?: Array<Usage & { timestamp: string; wci: number | null; cumulative_wci: number | null; cumulative_input_tokens: number | null; tool_calls: number; context_pressure: number | null }>
 }
 
 export type AllowanceWindow = {

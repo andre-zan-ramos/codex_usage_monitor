@@ -122,13 +122,13 @@ class AllowanceAnalyzer:
     def _activity(self, thread_activities: dict[str, list[tuple[datetime, datetime]]], start: datetime, end: datetime) -> dict[str, Any]:
         active = [thread_id for thread_id, ranges in thread_activities.items() if any(left <= end and right >= start for left, right in ranges)]
         if len(active) == 1:
-            return {"confidence": "HIGH", "active_threads": 1, "message": "Consumo observado enquanto esta era a única thread ativa."}
+            return {"confidence": "MEDIUM", "active_threads": 1, "message": "Uma única thread local foi observada; isso não comprova exclusividade nem autoria do consumo global."}
         if len(active) > 1:
             return {"confidence": "LOW", "active_threads": len(active), "message": f"{len(active)} threads estavam ativas neste intervalo — atribuição individual indisponível."}
         grace = timedelta(minutes=self.settings.activity_grace_minutes)
         near = [thread_id for thread_id, ranges in thread_activities.items() if any(left - grace <= end and right + grace >= start for left, right in ranges)]
         if len(near) == 1:
-            return {"confidence": "MEDIUM", "active_threads": 1, "message": "Uma thread próxima ao intervalo foi observada; atribuição não é causal."}
+            return {"confidence": "LOW", "active_threads": 1, "message": "Uma thread local próxima ao intervalo foi observada; atribuição não é causal."}
         return {"confidence": "NONE", "active_threads": 0, "message": "Atividade por thread insuficiente para contextualizar o consumo."}
 
     def summary(self, window_minutes: int, now: datetime, thread_activities: dict[str, list[tuple[datetime, datetime]]]) -> dict[str, Any] | None:
@@ -141,14 +141,14 @@ class AllowanceAnalyzer:
         short_window = self.settings.primary_short_minutes if window_minutes == 300 else self.settings.secondary_recent_minutes
         recent_window = self.settings.primary_recent_minutes if window_minutes == 300 else self.settings.secondary_recent_minutes
         trend_window = self.settings.primary_recent_minutes if window_minutes == 300 else self.settings.secondary_trend_minutes
-        short_rate = self._rate(points, now, short_window)
-        recent_rate = self._rate(points, now, recent_window)
-        trend_rate = self._rate(points, now, trend_window)
+        current_cycle = latest.cycle
+        cycle_points = [point for point in points if point.cycle == current_cycle]
+        short_rate = self._rate(cycle_points, now, short_window)
+        recent_rate = self._rate(cycle_points, now, recent_window)
+        trend_rate = self._rate(cycle_points, now, trend_window)
         trend = "INDISPONÍVEL"
         if short_rate is not None and trend_rate is not None and max(short_rate, trend_rate) >= 0.1:
             trend = "ACELERANDO" if short_rate > trend_rate * 1.2 else "DESACELERANDO" if short_rate < trend_rate * .8 else "ESTÁVEL"
-        current_cycle = latest.cycle
-        cycle_points = [point for point in points if point.cycle == current_cycle]
         session_start = cycle_points[0].observed_at
         for previous, current in zip(cycle_points, cycle_points[1:]):
             if (current.observed_at - previous.observed_at).total_seconds() > self.settings.session_gap_minutes * 60:
