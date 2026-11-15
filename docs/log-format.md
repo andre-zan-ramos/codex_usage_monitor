@@ -27,3 +27,15 @@ Percentual de cota não equivale diretamente a tokens, créditos ou dinheiro. Um
 Pontos equivalentes próximos são fundidos. Pequenas regressões entre produtores são descartadas da série canônica. Um novo ciclo é aberto por mudança material de `resets_at` ou queda inequívoca, como 98% para 2%; nenhum burn atravessa ciclos.
 
 Para 5h, as taxas curta e recente usam regressão linear sobre pontos reamostrados a cada 15 segundos nas janelas de 5 e 15 minutos. A estimativa até o limite só aparece com dados suficientes, sem reset cruzado e com snapshot de no máximo 120 segundos. Os parâmetros e thresholds ficam centralizados em `config.py`.
+
+## Consumo por turno
+
+Inspeção local de metadados em 15/11/2026: em 30 arquivos recentes, foram observados 161 `task_started`, 161 `turn_context` com identificadores concordantes, 1.205 `token_count` dentro desses intervalos e 157 `task_complete` concordantes. Nenhum dos snapshots tinha `turn_id`. Quatro encerramentos incluíam campo `error`: `task_complete` indica somente encerramento observado, nunca sucesso. Essa amostra não garante o formato de todos os logs.
+
+O detalhe da API adiciona `turns` e `unassigned_usage`. Início e contexto precisam concordar em um identificador não vazio; inícios sobrepostos, identificadores repetidos e contextos divergentes sinalizam ambiguidade. Modelo e esforço são listas dos valores efetivamente observados no contexto correspondente, sem herdar o último valor global da thread. Listas com mais de um valor sinalizam mudança; não há repartição dos tokens por modelo.
+
+Os contadores acumulados são observados; os consumos exibidos são diferenças derivadas entre snapshots adjacentes do mesmo turno confirmado. O primeiro snapshot apenas estabelece referência. A diferença que cruza o início, o fim ou a confirmação de um turno permanece não atribuída, mesmo quando isso reduz a cobertura do turno. Snapshots idênticos não acrescentam consumo e podem estabelecer a referência do novo turno. Sem acumulados, `last_token_usage` não é usado como substituto para atribuição. Regressões descartam a diferença e estabelecem nova referência; intervalos posteriores válidos podem ser contabilizados.
+
+Cada componente exige dois inteiros não negativos válidos. Um campo ausente ou inválido em um intervalo atribuído mantém esse componente indisponível no total do turno, em vez de apresentar uma soma parcial como completa. Zero é preservado. Entrada sem cache deriva de entrada menos cache quando ambos estão disponíveis e consistentes. Raciocínio é parte da saída, nunca parcela adicional. `intervals` conta diferenças atribuídas, não chamadas ou interações garantidas. Todos os totais de turno têm cobertura conservadora e parcial; não representam consumo completo da interação.
+
+As referências iniciais e snapshots sem acumulados têm diferenças desconhecidas (`null`), não zero. Logs sem marcadores continuam fornecendo os indicadores existentes, mas suas diferenças ficam não atribuídas. A cota global não participa dessa correlação. Não há avaliação de qualidade, conclusão ou eficiência de tarefas, nem consolidação de subagentes.

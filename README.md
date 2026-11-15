@@ -32,3 +32,5 @@ $env:PYTHONPATH = "$PWD\backend"
 O dashboard mostra `Allowance Burn`: a velocidade estimada da cota global de 5h e semanal, baseada nos snapshots `used_percent` registrados pelo Codex e restrita ao ciclo atual. Percentual de cota não equivale diretamente a tokens, créditos ou dinheiro. `Thread Health` e WCI são diagnósticos heurísticos de carga estrutural, sem recomendação automática de reinício de threads. Campos de tokens não informados aparecem como indisponíveis, preservando zeros explicitamente registrados.
 
 O monitor continua sem banco, telemetria ou escrita nos JSONL. A timeline é reconstruída na inicialização e atualizada incrementalmente em polling. Detalhes de formato, algoritmo, reset e limitações estão em [docs/log-format.md](docs/log-format.md).
+
+O detalhe da thread também mostra consumo por turno com cobertura conservadora, horários, modelo/esforço observados e encerramento observado. Valores são diferenças de acumulados; limites inseguros e referências ficam explicitamente não atribuídos. Consulte a seção de consumo por turno no documento de formato.

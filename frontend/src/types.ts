@@ -15,6 +15,8 @@ export type Health = {
 }
 
 export type Thread = {
+  turns?: TurnUsage[]
+  unassigned_usage?: Array<{ timestamp: string | null; reason: string; usage: Usage }>
   id: string
   title: string
   started_at: string | null
@@ -31,6 +33,12 @@ export type Thread = {
   duration_seconds: number | null
   health: Health
   evolution?: Array<Usage & { timestamp: string; wci: number | null; cumulative_wci: number | null; cumulative_input_tokens: number | null; tool_calls: number; context_pressure: number | null }>
+}
+
+export type TurnUsage = {
+  id: string | null; started_at: string | null; ended_at: string | null
+  state: string; models: string[]; efforts: string[]; confirmed: boolean; ambiguous: boolean
+  metadata_changed: boolean; usage: Usage; intervals: number; incomplete_fields: string[]
 }
 
 export type AllowanceWindow = {

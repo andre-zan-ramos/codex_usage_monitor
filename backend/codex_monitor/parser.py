@@ -8,6 +8,7 @@ import hashlib
 import json
 
 from .config import Settings
+from .turns import TurnTracker
 from .metrics import health, recent_growth, wci
 from .allowance import AllowanceAnalyzer, RateObservation, _parse_time
 
@@ -77,6 +78,7 @@ class ThreadState:
     rate_limits: dict[str, Any] | None = None
     rate_observations: list[RateObservation] = field(default_factory=list)
     activity_events: list[datetime] = field(default_factory=list)
+    turns: TurnTracker = field(default_factory=TurnTracker)
 
     def ingest(self, event: dict[str, Any]) -> None:
         self.event_count += 1
@@ -89,6 +91,7 @@ class ThreadState:
         kind = event.get("type")
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         ptype = payload.get("type")
+        self.turns.event(kind, payload, timestamp)
         if kind == "session_meta":
             self.thread_id = str(payload.get("session_id") or payload.get("id") or self.thread_id)
             self.started_at = _iso(payload.get("timestamp")) or self.started_at
@@ -111,6 +114,7 @@ class ThreadState:
             info = payload.get("info") if isinstance(payload.get("info"), dict) else {}
             total = _usage(info.get("total_token_usage"))
             last = _usage(info.get("last_token_usage"))
+            self.turns.snapshot(info.get("total_token_usage"), timestamp)
             # Timestamps, tools and rate-limit refreshes do not establish new consumption.
             observed = total if total and any(v is not None for v in total.values()) else last
             changed = False
@@ -186,6 +190,7 @@ class ThreadState:
             "parser": {"events": self.event_count, "invalid_lines": self.invalid_lines},
         }
         if include_evolution:
+            result.update(self.turns.as_dict())
             result["evolution"] = [
                 {
                     **point,
@@ -291,6 +296,8 @@ class SessionMonitor:
                     cursor.state.ingest(event)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 cursor.state.invalid_lines += 1
+                cursor.state.turns.previous = None
+                cursor.state.turns.previous_owner = None
         if not rebuilt:
             for observation in cursor.state.rate_observations[observations_before:]:
                 self.allowance.add(observation)
