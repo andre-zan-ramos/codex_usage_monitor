@@ -124,7 +124,8 @@ class AllowanceAnalyzer:
         if len(active) == 1:
             return {"confidence": "MEDIUM", "active_threads": 1, "message": "Uma única thread local foi observada; isso não comprova exclusividade nem autoria do consumo global."}
         if len(active) > 1:
-            return {"confidence": "LOW", "active_threads": len(active), "message": f"{len(active)} threads estavam ativas neste intervalo — atribuição individual indisponível."}
+            minutes = max(1, round((end - start).total_seconds() / 60))
+            return {"confidence": "LOW", "active_threads": len(active), "message": f"{len(active)} threads com eventos no intervalo recente (~{minutes} min); não necessariamente simultâneas — atribuição individual indisponível."}
         grace = timedelta(minutes=self.settings.activity_grace_minutes)
         near = [thread_id for thread_id, ranges in thread_activities.items() if any(left - grace <= end and right + grace >= start for left, right in ranges)]
         if len(near) == 1:

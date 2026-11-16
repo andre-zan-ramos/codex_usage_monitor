@@ -385,7 +385,7 @@ class SessionMonitor:
         alerts: list[dict[str, str]] = []
         if primary:
             if primary["classification"] in {"ELEVADO", "MUITO ALTO", "CRÍTICO"}:
-                alerts.append({"severity": primary["classification"], "message": "O consumo da janela de 5h está acelerado."})
+                alerts.append({"severity": primary["classification"], "message": "O ritmo de consumo da cota de 5h está elevado."})
             for value in (90, 80):
                 if primary["used_percent"] >= value:
                     alerts.append({"severity": "CRÍTICO" if value == 90 else "MUITO ALTO", "message": f"A cota de 5h atingiu {value}% utilizada."}); break
